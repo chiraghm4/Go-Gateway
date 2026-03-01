@@ -1,8 +1,8 @@
 package router
 
 import (
-	"api-gateway/internal/proxy"
 	"api-gateway/internal/middleware"
+	"api-gateway/internal/proxy"
 	"log"
 	"net/http"
 )
@@ -10,6 +10,13 @@ import (
 func SetupRoutes() (*http.ServeMux, error) {
 
 	mux := http.NewServeMux()
+
+	rateLimiter := middleware.NewRateLimiter(5)
+
+	// urlShortnerProxy, err := proxy.NewReverseProxy("http://localhost:8081")
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	usersProxy, err := proxy.NewReverseProxy("http://localhost:8081")
 	if err != nil {
@@ -21,9 +28,12 @@ func SetupRoutes() (*http.ServeMux, error) {
 		return nil, err
 	}
 
-	usersHandler := middleware.Chain(usersProxy, middleware.LoggingMiddleware)
-	ordersHandler := middleware.Chain(ordersProxy, middleware.LoggingMiddleware)
+	// urlShortnerHandler := middleware.Chain(urlShortnerProxy, rateLimiter.Middleware, middleware.LoggingMiddleware)
+	usersHandler := middleware.Chain(usersProxy, rateLimiter.Middleware, middleware.LoggingMiddleware)
+	ordersHandler := middleware.Chain(ordersProxy, rateLimiter.Middleware, middleware.LoggingMiddleware)
 
+	// mux.Handle("/", urlShortnerHandler)
+	// mux.Handle("/shorten", urlShortnerHandler)
 	mux.Handle("/users", usersHandler)
 	mux.Handle("/orders", ordersHandler)
 
