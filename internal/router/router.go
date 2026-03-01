@@ -11,7 +11,7 @@ func SetupRoutes() (*http.ServeMux, error) {
 
 	mux := http.NewServeMux()
 
-	rateLimiter := middleware.NewRateLimiter(5)
+	rateLimiter := middleware.NewRateLimiter(1000, 1000)
 
 	// urlShortnerProxy, err := proxy.NewReverseProxy("http://localhost:8081")
 	// if err != nil {
