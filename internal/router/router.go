@@ -1,7 +1,7 @@
 package router
 
 import (
-	loadbalancer "api-gateway/internal/loadBalancer"
+	"api-gateway/internal/loadbalancer"
 	"api-gateway/internal/middleware"
 	"api-gateway/internal/proxy"
 	"log"
