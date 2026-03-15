@@ -96,7 +96,7 @@ Uses:
 
 ### 1. Clone the repository
 
-git clone <repo-url>
+git clone https://github.com/chiraghm4/Go-Gateway.git
 
 cd api-gateway
 
