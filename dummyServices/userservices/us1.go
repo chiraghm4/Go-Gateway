@@ -11,6 +11,11 @@ func main() {
 		w.Write([]byte("users-service-1"))
 	})
 
+	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Println("health check passed")
+		w.Write([]byte("health check passed - us1"))
+	})
+
 	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 	// 	fmt.Println("welcome to user server 1")
 	// 	w.Write([]byte("welcome from user server 1"))
