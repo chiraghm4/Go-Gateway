@@ -1,0 +1,20 @@
+---
+gateway:
+  port: 8080
+  timeout_seconds: 30
+
+upstreams:
+  user-service:
+    targets:
+      - host: "localhost"
+        target_port: 8081
+      - host: "localhost"
+        target_port: 8082
+      - host: "localhost"
+        target_port: 8083
+
+endpoints:
+  - path: /user
+    method: GET
+    upstream: user-service
+    
