@@ -8,10 +8,13 @@ upstreams:
     targets:
       - host: "localhost"
         target_port: 8081
+        protocol: http
       - host: "localhost"
         target_port: 8082
+        protocol: http
       - host: "localhost"
         target_port: 8083
+        protocol: http
 
 endpoints:
   - path: /user

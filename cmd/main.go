@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -34,6 +35,7 @@ type Endpoint struct {
 type Target struct {
 	Host string `yaml:"host"`
 	TargetPort int `yaml:"target_port"`
+	Protocol string `yaml:"protocol"`
 }
 
 func main() {
@@ -41,7 +43,6 @@ func main() {
 	// yaml parsing
 
 	file, err := os.ReadFile("../gateway-config.yaml")
-
 	if err != nil {
 		log.Fatalf("cannot open config file - %v", err)
 	}
@@ -49,21 +50,32 @@ func main() {
 	var config Gateway
 
 	err = yaml.Unmarshal(file, &config)
-
 	if err != nil {
 		log.Fatalf("cannot parse config file - %v", err)
 	}
 
-	mux, err := router.SetupRoutes()
+	PORT := ":" + strconv.Itoa(config.Gateway.Port)
+
+	upstreams := config.Upstreams
+	upstreamIPs := []string{}
+
+	for _, ups := range(upstreams) {
+		for _, targets := range(ups.Targets) {
+			ip := targets.Protocol + "://" + targets.Host + ":" + strconv.Itoa(targets.TargetPort)
+			upstreamIPs = append(upstreamIPs, ip)
+		}
+	}
+
+	mux, err := router.SetupRoutes(upstreamIPs)
 	if err != nil {
 		log.Fatal("Server failed: ", err)
 	}
 
 	server := &http.Server{
-		Addr: ":8080",
+		Addr: PORT,
 		Handler: mux,
-		ReadTimeout: 5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout: time.Duration(config.Gateway.Timeout/2) * time.Second,
+		WriteTimeout: time.Duration(config.Gateway.Timeout/2) * time.Second,
 	}
 
 	log.Println("API Gateway running on :8080")
