@@ -16,8 +16,16 @@ upstreams:
         target_port: 8083
         protocol: http
 
+  order-service:
+    targets:
+      - host: "localhost"
+        target_port: 8082
+        protocol: http
+
 endpoints:
-  - path: /user
+  - path: /users
     method: GET
     upstream: user-service
-    
+  - path: /orders
+    method: GET
+    upstream: order-service

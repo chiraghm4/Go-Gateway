@@ -3,41 +3,50 @@ package router
 import (
 	"api-gateway/internal/loadbalancer"
 	"api-gateway/internal/middleware"
+	"fmt"
 	"log"
 	"net/http"
 )
 
-func SetupRoutes(upstreams []string) (*http.ServeMux, error) {
+type EndpointConfig struct {
+	Path     string
+	Method   string
+	Upstream string
+}
+
+func SetupRoutes(upstreamTargets map[string][]string, endpoints []EndpointConfig) (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 
 	rateLimiter := middleware.NewRateLimiter(250, 250)
 
-	// userLB, err := loadbalancer.NewRoundRobin([]string{
-	// 	"http://localhost:8081",
-	// 	"http://localhost:8082",
-	// 	"http://localhost:8083",
-	// })
+	lbs := make(map[string]*loadbalancer.RoundRobin)
+	startedHealthChecks := make(map[string]bool)
 
-	userLB, err := loadbalancer.NewRoundRobin(upstreams)
-	if err != nil {
-		return nil, err
+	for _, ep := range endpoints {
+		targets, ok := upstreamTargets[ep.Upstream]
+		if !ok {
+			return nil, fmt.Errorf("upstream %q not found in config", ep.Upstream)
+		}
+
+		lb, ok := lbs[ep.Upstream]
+		if !ok {
+			var err error
+			lb, err = loadbalancer.NewRoundRobin(targets)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create load balancer for %q: %w", ep.Upstream, err)
+			}
+			lbs[ep.Upstream] = lb
+
+			if !startedHealthChecks[ep.Upstream] {
+				lb.StartHealthCheck()
+				startedHealthChecks[ep.Upstream] = true
+			}
+		}
+
+		handler := middleware.Chain(lb, rateLimiter.Middleware, middleware.LoggingMiddleware)
+		mux.Handle(ep.Path, handler)
+		log.Printf("registered route %s -> upstream %s", ep.Path, ep.Upstream)
 	}
-
-	orderLB, err := loadbalancer.NewRoundRobin(upstreams)
-	if err != nil {
-		return nil, err
-	}
-
-	userLB.StartHealthCheck()
-	// orderLB.StartHealthCheck() // no need of this health check
-
-	usersHandler := middleware.Chain(userLB, rateLimiter.Middleware, middleware.LoggingMiddleware)
-	ordersHandler := middleware.Chain(orderLB, rateLimiter.Middleware, middleware.LoggingMiddleware)
-
-	mux.Handle("/users", usersHandler)
-	mux.Handle("/orders", ordersHandler)
-
-	log.Println("routes are configured")
 
 	return mux, nil
 }
