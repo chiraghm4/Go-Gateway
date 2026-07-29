@@ -5,8 +5,8 @@
 ```bash
 go run cmd/main.go              # Start gateway on :8080 (reads ../gateway-config.yaml)
 go build -o gateway cmd/main.go # Build binary
-go test ./test/...              # Run all tests
-go test ./test/ -run TestName   # Run single test
+go test ./...                   # Run all tests
+go test ./internal/loadbalancer/ -run TestName   # Run single test
 ```
 
 ## Critical Setup

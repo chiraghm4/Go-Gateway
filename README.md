@@ -1,165 +1,117 @@
 # Go API Gateway
 
-A simple **API Gateway implemented in Golang**.
+A config-driven API Gateway in Go with reverse proxy, rate limiting, round-robin load balancing, circuit breaker, and health checks.
 
-This project was built while learning Go to better understand how real backend infrastructure components like **reverse proxies, rate limiters, and load balancers** work.
+## Configuration
 
-The goal was to build a **practical system instead of just small tutorial examples**.
+The gateway is configured entirely via `gateway-config.yaml` (placed one directory above the binary — `../gateway-config.yaml` relative to `cmd/main.go`).
 
----
+### Full Example
 
-## Features
+```yaml
+gateway:
+  port: 8080
+  timeout_seconds: 30
 
-- Reverse proxy request forwarding
-- Middleware chaining
-- Logging middleware
-- Token Bucket rate limiting
-- Round Robin load balancing
-- Backend health checks
-- Concurrency using goroutines
-- Atomic counters for safe concurrent access
+upstreams:
+  user-service:
+    targets:
+      - host: "localhost"
+        target_port: 8081
+        protocol: http
+      - host: "localhost"
+        target_port: 8082
+        protocol: http
+      - host: "localhost"
+        target_port: 8083
+        protocol: http
 
----
+  order-service:
+    targets:
+      - host: "localhost"
+        target_port: 8082
+        protocol: http
+
+endpoints:
+  - path: /users
+    method: GET
+    upstream: user-service
+  - path: /orders
+    method: GET
+    upstream: order-service
+```
+
+### Sections
+
+#### `gateway`
+
+| Field | Description |
+|-------|-------------|
+| `port` | Port the gateway listens on |
+| `timeout_seconds` | Read/Write timeout for the HTTP server (split equally) |
+
+#### `upstreams`
+
+A map of named upstream service groups. Each key is an arbitrary name referenced by endpoints.
+
+| Field | Description |
+|-------|-------------|
+| `targets` | List of backend servers under this upstream |
+
+Each target:
+
+| Field | Description |
+|-------|-------------|
+| `host` | Backend hostname or IP |
+| `target_port` | Backend port |
+| `protocol` | `http` or `https` |
+
+#### `endpoints`
+
+A list of routes mapping URL paths to upstreams.
+
+| Field | Description |
+|-------|-------------|
+| `path` | URL path pattern (e.g. `/users`) |
+| `method` | HTTP method (currently informational; all methods match) |
+| `upstream` | References a key from `upstreams` |
 
 ## Architecture
 
-Client → API Gateway → Backend Services
+```
+Client → LoggingMiddleware → RateLimiter → LoadBalancer/Proxy → Backend
+```
 
-Example flow:
+- **Rate limiter**: Token bucket, 250 requests/burst per IP
+- **Load balancer**: Round-robin across healthy backends
+- **Circuit breaker**: Opens after 5 consecutive failures, half-open after 30s
+- **Health checks**: Polls `/health` on each backend every 5s; unhealthy servers are skipped
 
-Client
-|
-API Gateway
-|
-├── users-service-1
-├── users-service-2
-└── users-service-3
+## Quick Start
 
+```bash
+# 1. Start backend services (instances on 8081, 8082, 8083)
+go run .\dummyServices\userservices\userService.go
 
-The gateway distributes traffic between backend services using **Round Robin load balancing**.
+# 2. Start the gateway (from repo root)
+go run .\cmd\main.go
 
----
+# 3. Test
+curl http://localhost:8080/users
+```
+
+Requests are distributed across backends in round-robin. Unhealthy backends are automatically removed from rotation.
 
 ## Project Structure
 
-api-gateway/
-│
-├── cmd/
-│ └── main.go
-│
-├── internal/
-│ ├── loadbalancer/
-│ │ └── roundrobin.go
-│ │
-│ ├── middleware/
-│ │ ├── chain.go
-│ │ ├── logging.go
-│ │ └── ratelimiter.go
-│ │
-│ ├── proxy/
-│ │ └── proxy.go
-│ │
-│ └── router/
-│ └── router.go
-│
-└── go.mod
-
-
----
-
-## Concepts Implemented
-
-### Reverse Proxy
-The gateway forwards incoming requests to backend services using Go's `httputil.ReverseProxy`.
-
-### Middleware
-Custom middleware chain implementation similar to frameworks like Gin or Express.
-
-### Rate Limiting
-Token Bucket algorithm to limit incoming request rate.
-
-### Load Balancing
-Round Robin strategy distributes requests between backend services.
-
-### Health Checks
-Background health checker detects unhealthy services and removes them from rotation.
-
-### Concurrency
-Uses:
-- Goroutines
-- Atomic counters
-- Background workers
-
----
-
-## Running the Project
-
-### 1. Clone the repository
-
-git clone https://github.com/chiraghm4/Go-Gateway.git
-
-cd api-gateway
-
-
-### 2. Start backend services
-
-Example services running on different ports:
-
-localhost:8081
-localhost:8082
-localhost:8083
-
-Each service should expose:
-
-/users
-/health
-
-### 3. Start the API Gateway
-
-go run cmd/main.go
-
-Gateway runs on:
-http://localhost:8080
-
-
----
-
-## Test the Gateway
-
-Send requests:
-curl http://localhost:8080/users
-
-Requests will be distributed across backend services.
-
----
-
-## Example
-
-Responses should rotate between:
-users-service-1
-users-service-2
-users-service-3
-
----
-
-## Learning Notes
-
-This project was built while **learning Golang** and exploring backend architecture concepts.
-
-Some implementation ideas and learning guidance were taken with help from **ChatGPT**.
-
----
-
-## Future Improvements
-
-Possible improvements:
-
-- Retry logic
-- Circuit breaker
-- Distributed rate limiting (Redis)
-- Metrics (Prometheus)
-- gRPC support
-- Dynamic service discovery
-
----
-
+```
+cmd/main.go              Entry point — reads config, sets up routes
+internal/
+  router/router.go       Route registration + middleware wiring
+  middleware/            Logging, rate limiter, middleware chain
+  loadbalancer/          Round Robin + health checks + circuit breaker
+  circuitbreaker/        Circuit breaker (closed → open → half-open)
+  proxy/                 Reverse proxy wrapper
+test/                    Tests (circuit breaker, load balancer, proxy, rate limiter)
+dummyServices/           Sample backend services for local testing
+```
